@@ -326,7 +326,7 @@ if st.button("Processar Arquivos", type="primary"):
                 st.dataframe(pd.DataFrame(lista_resumo), use_container_width=True)
                 
                 # Botão Download
-                pdf_bytes = pdf_out.output(dest='S').encode('latin-1')
+                pdf_bytes = pdf_out.output()
                 st.download_button(
                     label="📥 Baixar Relatório Consolidado (PDF)",
                     data=pdf_bytes,
