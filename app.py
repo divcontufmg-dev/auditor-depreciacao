@@ -321,12 +321,14 @@ if st.button("Processar Arquivos", type="primary"):
                 progresso.empty()
                 status_box.success("Processamento Finalizado com Sucesso!")
                 
-                # --- RESULTADOS NA TELA ---
+               # --- RESULTADOS NA TELA ---
                 st.markdown("### Resumo da Conferência")
                 st.dataframe(pd.DataFrame(lista_resumo), use_container_width=True)
                 
                 # Botão Download
-                pdf_bytes = pdf_out.output()
+                # CORREÇÃO AQUI: Converter bytearray para bytes explicitamente
+                pdf_bytes = bytes(pdf_out.output()) 
+                
                 st.download_button(
                     label="📥 Baixar Relatório Consolidado (PDF)",
                     data=pdf_bytes,
