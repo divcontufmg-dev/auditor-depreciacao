@@ -7,30 +7,27 @@ import io
 import os
 
 # ==========================================
-# CONFIGURAÇÃO DA PÁGINA
+# CONFIGURAÇÃO INICIAL (Idêntica à ferramenta RMB)
 # ==========================================
 st.set_page_config(
-    page_title="Conciliador de Depreciação",
-    page_icon="📉",
+    page_title="Conciliador Depreciação x SIAFI",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS para manter a identidade visual limpa
+# Estilos CSS
 hide_streamlit_style = """
             <style>
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
-            .stFileUploader {
-                padding-top: 2rem;
-            }
             </style>
             """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # ==========================================
-# FUNÇÕES DE LÓGICA (EXTRAÇÃO E CONVERSÃO)
+# FUNÇÕES AUXILIARES
 # ==========================================
 
 def formatar_real(valor):
@@ -65,7 +62,10 @@ def extrair_id_unidade(nome_arquivo):
     match = re.match(r"^(\d+)", nome_arquivo)
     return match.group(1) if match else None
 
-# --- PROCESSAMENTO PDF ---
+# ==========================================
+# MOTORES DE EXTRAÇÃO (Lógica de Depreciação)
+# ==========================================
+
 def processar_pdf(arquivo_obj):
     dados_pdf = {}
     texto_completo = ""
@@ -85,7 +85,7 @@ def processar_pdf(arquivo_obj):
         end_idx = matches[i+1].start() if i + 1 < len(matches) else len(texto_completo)
         bloco_texto = texto_completo[start_idx:end_idx]
         
-        # Busca Saldo Atual
+        # Busca Saldo Atual no bloco
         regex_saldo = re.compile(r"\(\*\)\s*SALDO[\s\S]*?ATUAL[\s\S]*?((?:\d{1,3}(?:\.\d{3})*,\d{2}))")
         match_saldo = regex_saldo.search(bloco_texto)
         
@@ -96,10 +96,8 @@ def processar_pdf(arquivo_obj):
             
     return dados_pdf
 
-# --- PROCESSAMENTO EXCEL ---
 def processar_excel(arquivo_obj):
     try:
-        # Tenta ler como CSV primeiro
         df = pd.read_csv(arquivo_obj, sep=',', encoding='latin1', header=None)
     except:
         try: 
@@ -107,7 +105,6 @@ def processar_excel(arquivo_obj):
             df = pd.read_excel(arquivo_obj, header=None)
         except: return {}
 
-    # Localiza linha de cabeçalho
     linha_cabecalho = -1
     for i, row in df.iterrows():
         if "Nat Desp" in " ".join([str(x) for x in row.values]):
@@ -137,7 +134,7 @@ def processar_excel(arquivo_obj):
     return dados_excel
 
 # ==========================================
-# CLASSE PDF (Visual Ajustado)
+# CLASSE PDF (Visual do Relatório)
 # ==========================================
 class PDFRelatorio(FPDF):
     def header(self):
@@ -151,158 +148,156 @@ class PDFRelatorio(FPDF):
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 # ==========================================
-# INTERFACE PRINCIPAL
+# INTERFACE DO USUÁRIO (LAYOUT PADRONIZADO)
 # ==========================================
 
-# Sidebar com instruções
+# --- Sidebar ---
 with st.sidebar:
     st.header("Instruções")
     st.markdown("""
-    **Como usar:**
-    1.  Arraste **todos os arquivos** (PDFs e Excel/CSVs) para a área de upload.
-    2.  O sistema separará automaticamente os tipos de arquivo.
-    3.  O cruzamento é feito pelo **código da unidade** no início do nome.
+    **Passo a Passo:**
+    1.  **Arraste todos os arquivos** para a área de upload (PDFs e Planilhas misturados).
+    2.  O sistema identificará os pares automaticamente pelo **código da unidade** (início do nome).
+    3.  Clique em **Processar Arquivos**.
     
-    **Exemplo:**
-    * `153289.pdf` (Relatório)
-    * `153289_SIAFI.xlsx` (Dados)
-    * O sistema identifica "153289" e cruza os dados.
+    **Arquivos Aceitos:**
+    * **PDF:** Relatório de Depreciação (contendo "(*) SALDO ATUAL").
+    * **Excel/CSV:** Razão Auxiliar do SIAFI.
     """)
     st.markdown("---")
-    st.markdown("**Versão:** 2.1 (Upload Unificado)")
+    st.markdown("**Versão:** 2.2 (Layout Unificado)")
 
-# Área Central
-st.title("📉 Conciliador Automático de Depreciação")
-st.markdown("Faça o upload de todos os arquivos (Relatórios PDF e Planilhas SIAFI) de uma só vez.")
+# --- Área Principal ---
+st.title("📊 Conciliador Automático: Depreciação (PDF) x Razão SIAFI (Excel)")
+st.markdown("Carregue seus arquivos abaixo para iniciar a conferência automática.")
 
-# --- UPLOAD UNIFICADO ---
-arquivos_upload = st.file_uploader(
-    "Arraste todos os arquivos aqui (PDF, Excel, CSV)", 
-    type=["pdf", "xlsx", "csv"], 
+uploaded_files = st.file_uploader(
+    "Carregue seus arquivos aqui (PDFs e Excels misturados)", 
+    type=['pdf', 'xlsx', 'csv'], 
     accept_multiple_files=True
 )
 
-if st.button("🚀 Processar Conciliação", type="primary"):
-    if not arquivos_upload:
-        st.warning("⚠️ Nenhum arquivo carregado.")
+if st.button("Processar Arquivos", type="primary"):
+    if not uploaded_files:
+        st.warning("⚠️ Por favor, insira os arquivos para processar.")
     else:
-        # Separação automática dos arquivos
-        arquivos_pdf = [f for f in arquivos_upload if f.name.lower().endswith('.pdf')]
-        arquivos_excel = [f for f in arquivos_upload if f.name.lower().endswith(('.xlsx', '.csv'))]
+        # Separação
+        pdfs = [f for f in uploaded_files if f.name.lower().endswith('.pdf')]
+        excels = [f for f in uploaded_files if f.name.lower().endswith(('.xlsx', '.csv'))]
         
-        st.info(f"Arquivos identificados: {len(arquivos_pdf)} Relatórios PDF e {len(arquivos_excel)} Planilhas SIAFI.")
+        st.info(f"Arquivos identificados: {len(pdfs)} PDFs e {len(excels)} Planilhas.")
         
-        if not arquivos_pdf or not arquivos_excel:
-            st.error("❌ É necessário pelo menos 1 PDF e 1 Excel/CSV para prosseguir.")
+        if not pdfs or not excels:
+            st.error("❌ Necessário pelo menos 1 PDF e 1 Excel/CSV para cruzar os dados.")
         else:
-            # Agrupamento por Unidade
+            # Pareamento
             unidades = {}
-            
-            for f in arquivos_pdf:
+            for f in pdfs:
                 uid = extrair_id_unidade(f.name)
                 if uid:
                     if uid not in unidades: unidades[uid] = {}
                     unidades[uid]['pdf'] = f
-                    
-            for f in arquivos_excel:
+            
+            for f in excels:
                 uid = extrair_id_unidade(f.name)
                 if uid:
                     if uid not in unidades: unidades[uid] = {}
                     unidades[uid]['excel'] = f
-
-            # Filtra apenas os pares completos
-            pares_validos = [u for u, arqs in unidades.items() if 'pdf' in arqs and 'excel' in arqs]
-
-            if not pares_validos:
-                st.error("❌ Nenhum par correspondente encontrado (Nomes não batem).")
+            
+            # Filtra pares completos
+            pares = [uid for uid, docs in unidades.items() if 'pdf' in docs and 'excel' in docs]
+            
+            if not pares:
+                st.error("❌ Nenhum par de arquivos correspondente encontrado (Verifique os nomes).")
             else:
+                # Início do Processamento
                 progresso = st.progress(0)
-                status_text = st.empty()
+                status_box = st.empty()
                 
-                # Setup do PDF
+                # Setup PDF
                 pdf_out = PDFRelatorio()
                 pdf_out.set_auto_page_break(auto=True, margin=15)
                 pdf_out.add_page()
                 
-                resumo_geral = []
-
-                for idx, uid in enumerate(sorted(pares_validos)):
-                    status_text.text(f"Analisando Unidade: {uid}...")
-                    arqs = unidades[uid]
+                lista_resumo = []
+                
+                for idx, uid in enumerate(sorted(pares)):
+                    status_box.text(f"Processando Unidade: {uid}...")
                     
+                    docs = unidades[uid]
                     # Reset ponteiros
-                    arqs['pdf'].seek(0)
-                    arqs['excel'].seek(0)
+                    docs['pdf'].seek(0)
+                    docs['excel'].seek(0)
                     
                     # Extração
-                    d_pdf = processar_pdf(arqs['pdf'])
-                    d_excel = processar_excel(arqs['excel'])
+                    d_pdf = processar_pdf(docs['pdf'])
+                    d_excel = processar_excel(docs['excel'])
                     
-                    # Comparação
+                    # Consolidação
                     grupos = sorted(list(set(d_pdf.keys()) | set(d_excel.keys())))
                     divergencias = []
-                    total_pdf = 0.0
-                    total_excel = 0.0
+                    soma_pdf = 0.0
+                    soma_excel = 0.0
                     
                     for g in grupos:
-                        v_p = d_pdf.get(g, 0.0)
-                        v_e = d_excel.get(g, 0.0)
-                        total_pdf += v_p
-                        total_excel += v_e
+                        vp = d_pdf.get(g, 0.0)
+                        ve = d_excel.get(g, 0.0)
+                        soma_pdf += vp
+                        soma_excel += ve
                         
-                        diff = v_p - v_e
-                        if abs(diff) > 0.10:
-                            divergencias.append({'grupo': g, 'pdf': v_p, 'excel': v_e, 'diff': diff})
+                        dif = vp - ve
+                        if abs(dif) > 0.10: # Tolerância 10 centavos
+                            divergencias.append({'grupo': g, 'pdf': vp, 'excel': ve, 'diff': dif})
 
-                    # --- GERAÇÃO DO RELATÓRIO PDF ---
-                    if pdf_out.get_y() > 240: pdf_out.add_page()
-
-                    # Cabeçalho Unidade
-                    pdf_out.set_font("Helvetica", 'B', 11)
+                    # --- GERAÇÃO PDF ---
+                    if pdf_out.get_y() > 250: pdf_out.add_page()
+                    
+                    # Título Unidade
+                    pdf_out.set_font("helvetica", 'B', 11)
                     pdf_out.set_fill_color(240, 240, 240)
                     pdf_out.cell(0, 8, f"Unidade Gestora: {uid}", 1, fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     pdf_out.ln(2)
-
-                    # Tabela de Totais
-                    pdf_out.set_font("Helvetica", 'B', 9)
-                    pdf_out.set_fill_color(220, 230, 241) # Azul Identidade Visual
                     
+                    # Tabela Totais
+                    pdf_out.set_font("helvetica", 'B', 9)
+                    pdf_out.set_fill_color(220, 230, 241)
                     pdf_out.cell(63, 7, "Total Relatório", 1, fill=True)
                     pdf_out.cell(63, 7, "Total SIAFI", 1, fill=True)
                     pdf_out.cell(63, 7, "Diferença", 1, fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     
-                    pdf_out.set_font("Helvetica", '', 9)
-                    pdf_out.cell(63, 7, f"R$ {formatar_real(total_pdf)}", 1)
-                    pdf_out.cell(63, 7, f"R$ {formatar_real(total_excel)}", 1)
+                    pdf_out.set_font("helvetica", '', 9)
+                    pdf_out.cell(63, 7, f"R$ {formatar_real(soma_pdf)}", 1)
+                    pdf_out.cell(63, 7, f"R$ {formatar_real(soma_excel)}", 1)
                     
-                    dif_total = total_pdf - total_excel
+                    dif_total = soma_pdf - soma_excel
                     if abs(dif_total) > 0.10: pdf_out.set_text_color(200, 0, 0)
                     else: pdf_out.set_text_color(0, 100, 0)
                     
                     pdf_out.cell(63, 7, f"R$ {formatar_real(dif_total)}", 1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     pdf_out.set_text_color(0, 0, 0)
                     pdf_out.ln(3)
-
-                    # Divergências
-                    status_tela = "✅ OK"
+                    
+                    # Status
+                    status_str = "✅ Conciliado"
                     if not divergencias:
-                        pdf_out.set_fill_color(220, 255, 220)
-                        pdf_out.set_font("Helvetica", 'B', 9)
+                        pdf_out.set_fill_color(220, 255, 220) # Verde
+                        pdf_out.set_font("helvetica", 'B', 9)
                         pdf_out.cell(0, 8, "CONCILIADO", 1, fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     else:
-                        status_tela = f"❌ {len(divergencias)} Erros"
-                        pdf_out.set_fill_color(255, 220, 220)
-                        pdf_out.set_font("Helvetica", 'B', 9)
+                        status_str = f"❌ {len(divergencias)} Divergência(s)"
+                        pdf_out.set_fill_color(255, 220, 220) # Vermelho
+                        pdf_out.set_font("helvetica", 'B', 9)
                         pdf_out.cell(0, 8, "DIVERGÊNCIAS ENCONTRADAS:", 1, fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                         
+                        # Tabela Erros
                         pdf_out.set_fill_color(250, 250, 250)
-                        pdf_out.set_font("Helvetica", 'B', 8)
+                        pdf_out.set_font("helvetica", 'B', 8)
                         pdf_out.cell(20, 6, "Grupo", 1, fill=True, align='C')
-                        pdf_out.cell(56, 6, "Saldo Relatório", 1, fill=True, align='C')
+                        pdf_out.cell(56, 6, "Saldo Relat.", 1, fill=True, align='C')
                         pdf_out.cell(56, 6, "Saldo SIAFI", 1, fill=True, align='C')
                         pdf_out.cell(57, 6, "Diferença", 1, fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                         
-                        pdf_out.set_font("Helvetica", '', 8)
+                        pdf_out.set_font("helvetica", '', 8)
                         for d in divergencias:
                             pdf_out.cell(20, 6, str(d['grupo']), 1, align='C')
                             pdf_out.cell(56, 6, formatar_real(d['pdf']), 1, align='R')
@@ -310,26 +305,27 @@ if st.button("🚀 Processar Conciliação", type="primary"):
                             pdf_out.set_text_color(200, 0, 0)
                             pdf_out.cell(57, 6, formatar_real(d['diff']), 1, align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                             pdf_out.set_text_color(0, 0, 0)
-
+                            
                     pdf_out.ln(5)
-                    pdf_out.cell(0, 0, "", "B", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                    pdf_out.cell(0, 0, "", "B", new_x=XPos.LMARGIN, new_y=YPos.NEXT) # Linha divisória
                     pdf_out.ln(5)
                     
-                    resumo_geral.append({
+                    lista_resumo.append({
                         "Unidade": uid,
-                        "Status": status_tela,
-                        "Diferença Global": f"R$ {formatar_real(dif_total)}"
+                        "Status": status_str,
+                        "Diferença Total": f"R$ {formatar_real(dif_total)}"
                     })
                     
-                    progresso.progress((idx + 1) / len(pares_validos))
-
+                    progresso.progress((idx + 1) / len(pares))
+                
                 progresso.empty()
-                status_text.success("Processamento finalizado!")
+                status_box.success("Processamento Finalizado com Sucesso!")
                 
-                # Resumo e Download
-                st.markdown("### Resumo da Análise")
-                st.dataframe(pd.DataFrame(resumo_geral), use_container_width=True)
+                # --- RESULTADOS NA TELA ---
+                st.markdown("### Resumo da Conferência")
+                st.dataframe(pd.DataFrame(lista_resumo), use_container_width=True)
                 
+                # Botão Download
                 pdf_bytes = pdf_out.output(dest='S').encode('latin-1')
                 st.download_button(
                     label="📥 Baixar Relatório Consolidado (PDF)",
